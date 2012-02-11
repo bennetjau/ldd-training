@@ -11,7 +11,8 @@
 int main(void)
 {
 	int fd;
-	fd = open("/dev/cdata", 0_RDWR);
+
+	fd = open("/dev/cdata", O_RDWR);
 	close(fd);
 	
 
