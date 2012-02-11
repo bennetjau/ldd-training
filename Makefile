@@ -1,9 +1,9 @@
 #
 # Author:Bennet
 #
-obj-m :=cdata.o
+obj-m := cdata.o
 
-KDIR:=/lib/modules/2.6.24-26-generic/build
+KDIR := /lib/modules/2.6.24-26-generic/build
 PWD := $(shell pwd)
 
 default:
