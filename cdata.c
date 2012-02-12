@@ -27,13 +27,8 @@ static int cdata_open(struct inode *inode, struct file *filp)
 
 
 	minor = MINOR(inode->i_rdev);
-	if(minor >= 0){
-		printk(KERN_INFO "CDATA: Minor number = %d\n", minor);
-	}
-	else{
-		printk(KERN_INFO "CDATA: Error minor number = %d\n", minor);
-		return -ENODEV;	
-	}
+	printk(KERN_INFO "CDATA: Minor number = %d\n", minor);
+
 	//MOD_INC_USE_COUNT;	//used in linux 2.4
 
 /*
@@ -71,7 +66,7 @@ ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff_t *off
 	return 0;
 }
 
-int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int ui, unsigned long ul)
+int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	printk(KERN_INFO "CDATA: IOCtl\n");
 	return 0;
