@@ -21,7 +21,19 @@
 
 static int cdata_open(struct inode *inode, struct file *filp)
 {
-	printk(KERN_INFO "cdata_open\n");
+	int i;
+
+	printk(KERN_INFO "cdata_open_50000000_SS\n");
+	for(i=0;i<50000000;i++){
+		schedule();
+	}
+/*
+	printk(KERN_INFO "cdata_open_5000_T\n");
+	for(i=0;i<5000;i++){
+		current->state = TASK_UNINTERRUPTIBLE;
+		schedule();
+	}
+*/
 	return 0;
 }
 
@@ -55,7 +67,7 @@ int cdata_init_module(void)
 
 void cdata_cleanup_module(void)
 {
-	printk(KERN_INFO "cdata_cleanup_module");
+	printk(KERN_INFO "cdata_cleanup_module\n");
 	unregister_chrdev(121, "cdata");
 }
 
