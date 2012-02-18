@@ -14,20 +14,30 @@
 #include <linux/input.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
-
+#include "cdata_ioctl.h"
 
 #define DEV_MAJOR 121
 #define DEV_NAME "cdata"
+
+struct cdata_t{
+	unsigned long *fb;
+};
 
 static int cdata_open(struct inode *inode, struct file *filp)
 {
 //	int i;
 	int minor;
-	printk(KERN_INFO "CDATA: Open\n");
+	struct cdata_t *cdata; //使用指標是為了避免重複進入問題
 
+	printk(KERN_INFO "CDATA: Open\n");
+	
 
 	minor = MINOR(inode->i_rdev);
 	printk(KERN_INFO "CDATA: Minor number = %d\n", minor);
+
+	cdata=kmalloc(sizeof(struct cdata_t), GFP_KERNEL);
+	cdata->fb = ioremap(0x33f00000, 320*240*4);
+	filp->private_data = (void *)cdata;
 
 	//MOD_INC_USE_COUNT;	//used in linux 2.4
 
@@ -103,7 +113,58 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 
 static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg)
 {
+	struct cdata_t *cdata = (struct cdata*)filp->private_data;
+	int n;
+	unsigned long *fb;
+	int i;
+
 	printk(KERN_INFO "CDATA: IOCtl\n");
+	switch(cmd){
+		case CDATA_CLEAR:
+			n=*((int*)arg);//FIXME:
+			printk(KERN_INFO"CDATA_CLEAR: %d pixel\n",n);
+			fb = cdata->fb;
+			for (i=0;i<n;i++)
+				writel(0x00ffffff, fb++);
+			break;
+		case CDATA_RED:
+			printk(KERN_INFO"CDATA_RED\n");
+
+			fb = cdata->fb;
+			for (i=0;i<320*240;i++)
+				writel(0x00ff0000,fb++);
+			break;
+		case CDATA_GREEN:
+			printk(KERN_INFO"CDATA_GREEN\n");
+
+			fb = cdata->fb;
+			for (i=0;i<320*240;i++)
+				writel(0x0000ff00, fb++);
+			break;			
+		case CDATA_BLUE:
+			printk(KERN_INFO"CDATA_BLUE\n");
+
+			fb = cdata->fb;
+			for (i=0;i<320*240;i++)
+				writel(0x000000ff, fb++);
+			break;
+		case CDATA_BLACK:
+			printk(KERN_INFO"CDATA_BALCK\n");
+
+			fb = cdata->fb;
+			for (i=0;i<320*240;i++)
+				writel(0x00000000, fb++);
+			break;
+		case CDATA_WHITE:
+			printk(KERN_INFO"CDATA_WHITE\n");
+
+			fb = cdata->fb;
+			for (i=0;i<320*240;i++)
+			writel(0x00ffffff, fb++);
+			break;
+	}
+
+
 	return 0;
 }
 
@@ -139,7 +200,7 @@ static int cdata_init_module(void)
 
 	fb = ioremap(0x33f00000, 320*240*4); //screen size 320*240
 	for (i=0;i<320*240;i++)
-		writel(0x00ff0000, fb++); // 1 pixel ,4bite
+		writel(0x00ff4488, fb++); // 1 pixel ,4byte
 
 	printk(KERN_INFO "CDATA: Init module~~~XXXX\n");
 	if (register_chrdev(DEV_MAJOR, DEV_NAME, &cdata_fops) < 0) {
