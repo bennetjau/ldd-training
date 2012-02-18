@@ -18,7 +18,8 @@ int main(void)
 	char pix[4] = {0x00, 0xff, 0x00, 0xff};
 		
 	fd = open("/dev/cdata", O_RDWR);
-	write(fd, pix,4);
+	for(i =0;i<256;i++)
+		write(fd, pix,4);
 
 	//i = 10000;
 	//ioctl(fd, CDATA_CLEAR, &i);

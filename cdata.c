@@ -18,10 +18,12 @@
 
 #define DEV_MAJOR 121
 #define DEV_NAME "cdata"
+#define BUF_SIZE (128)
 
 struct cdata_t{
 	unsigned long *fb;
-
+	unsigned char *buf;
+	unsigned int  index;
 };
 
 static int cdata_open(struct inode *inode, struct file *filp)
@@ -38,7 +40,12 @@ static int cdata_open(struct inode *inode, struct file *filp)
 
 	cdata=kmalloc(sizeof(struct cdata_t), GFP_KERNEL);
 	cdata->fb = ioremap(0x33f00000, 320*240*4);
+	cdata->buf = kmalloc(BUF_SIZE, GFP_KERNEL);
+	cdata->index = 0;
+
 	filp->private_data = (void *)cdata;
+
+
 
 	//MOD_INC_USE_COUNT;	//used in linux 2.4
 
@@ -71,22 +78,61 @@ static ssize_t cdata_read(struct file *filp, char *buf, size_t size, loff_t *off
 	return 0;
 }
 
+void flush_lcd(void *priv)
+{
+	struct cdata_t *cdata = (struct cdata *)priv;
+	unsigned int index;
+	unsigned int i;
+	unsigned char *buf;
+	unsigned char *fb;
+
+	buf = cdata->buf;
+	fb = cdata->fb;
+	index = cdata->index;
+
+	for (i=0;i < index;i++){
+		writeb(buf[i], fb++);
+	}
+
+	cdata->index = 0;
+}
+
+
 static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff_t *off)
 {
 
 	struct cdata_t *cdata = (struct cdata*)filp->private_data;
-	unsigned char *fb;
+	unsigned char *pixel;
+	
+	unsigned int index;
 	unsigned int i;
 
-	fb = cdata->fb;
-	
 	printk(KERN_INFO "CDATA: Write\n");
 
 
+	pixel = cdata->buf;
+	index = cdata->index;
+
+
+	for (i=0;i < size;i++){
+		printk(KERN_INFO "CDATA:Index = %d\n",cdata->index++);
+		if(index >= BUF_SIZE){
+			printk(KERN_INFO "CDATA:Buffer Full\n");
+			//buffer full
+			flush_lcd((void *)cdata);
+			index = cdata->index;  //要用狀態的思考方式,而不要用邏輯的思考方式,如index = 0;
+		}
+		//fb[index] = buf[i];
+		copy_from_user(&pixel[index], &buf[i], 1);
+		index++;
+	}
+	cdata->index = index;
+
+/*
 	//這樣寫不好,要考慮buffering的部份,把AP丟進來的東西先存下來,等存滿再一次送到硬體執行
 	for (i = 0;i < size;i++)
 		writeb(buf[i], fb);
-
+*/
 
 /*
 	//Lab1, 無排程
@@ -189,7 +235,12 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 
 static int cdata_close(struct inode *inode, struct file *filp)
 {
+	struct cdata_t *cdata = (struct cdata*)filp->private_data;
+
 	printk(KERN_INFO "CDATA: Close\n");
+	flush_lcd((void *)cdata);
+	kfree(cdata->buf);
+	kfree(cdata);
 	//MOD_DEC_USE_COUNT;	//used in linux 2.4
 	return 0;
 }
