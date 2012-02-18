@@ -18,14 +18,15 @@ int main(void)
 	char pix[4] = {0x00, 0xff, 0x00, 0xff};
 		
 	fd = open("/dev/cdata", O_RDWR);
+	//for(i =0;i<320*240;i++)
 	while(1)
 		write(fd, pix,4);
 
-	//i = 10000;
+	//i = 320*240;
 	//ioctl(fd, CDATA_CLEAR, &i);
 /*
 	sleep(3);
-	ioctl(fd, CDATA_RED);
+	ioctl(fd, CDATA_RED);	
 	sleep(3);
 	ioctl(fd, CDATA_GREEN);
 	sleep(3);

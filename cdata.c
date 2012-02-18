@@ -90,6 +90,7 @@ void flush_lcd(void *priv)
 	unsigned char *buf;
 	unsigned char *fb;
 	unsigned int offset;
+	int j;
 
 	buf = cdata->buf;
 	fb = cdata->fb;
@@ -101,6 +102,8 @@ void flush_lcd(void *priv)
 		offset++;
 		if(offset > LCD_SIZE)
 			offset = 0;
+		 // Lab
+		for (j = 0; j < 100000; j++);
 	}
 
 	cdata->index = 0;
@@ -191,7 +194,10 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 	printk(KERN_INFO "CDATA: IOCtl\n");
 	switch(cmd){
 		case CDATA_CLEAR:
-			n=*((int*)arg);//FIXME:dirty
+
+			//n=*((int*)arg);//FIXME:dirty  ,應使用 copy_from_user()
+			copy_from_user(&n, (int *)arg, 1); //???是這樣嗎？
+
 			printk(KERN_INFO"CDATA_CLEAR: %d pixel\n",n);
 
 			//FixME:Lock
