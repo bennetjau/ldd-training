@@ -19,11 +19,13 @@
 #define DEV_MAJOR 121
 #define DEV_NAME "cdata"
 #define BUF_SIZE (128)
+#define LCD_SIZE (320*240*4)
 
 struct cdata_t{
 	unsigned long *fb;
 	unsigned char *buf;
 	unsigned int  index;
+	unsigned int offset;
 };
 
 static int cdata_open(struct inode *inode, struct file *filp)
@@ -42,6 +44,8 @@ static int cdata_open(struct inode *inode, struct file *filp)
 	cdata->fb = ioremap(0x33f00000, 320*240*4);
 	cdata->buf = kmalloc(BUF_SIZE, GFP_KERNEL);
 	cdata->index = 0;
+ 	cdata->offset = 0;
+
 
 	filp->private_data = (void *)cdata;
 
@@ -85,16 +89,22 @@ void flush_lcd(void *priv)
 	unsigned int i;
 	unsigned char *buf;
 	unsigned char *fb;
+	unsigned int offset;
 
 	buf = cdata->buf;
 	fb = cdata->fb;
 	index = cdata->index;
+	offset = cdata->offset;
 
 	for (i=0;i < index;i++){
-		writeb(buf[i], fb++);
+		writeb(buf[i], fb+offset);
+		offset++;
+		if(offset > LCD_SIZE)
+			offset = 0;
 	}
 
 	cdata->index = 0;
+	cdata->offset = offset;
 }
 
 
@@ -107,7 +117,7 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 	unsigned int index;
 	unsigned int i;
 
-	printk(KERN_INFO "CDATA: Write\n");
+	//printk(KERN_INFO "CDATA: Write\n");
 
 
 	pixel = cdata->buf;
@@ -115,9 +125,9 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 
 
 	for (i=0;i < size;i++){
-		printk(KERN_INFO "CDATA:Index = %d\n",cdata->index++);
+		//printk(KERN_INFO "CDATA:Index = %d\n",cdata->index++);
 		if(index >= BUF_SIZE){
-			printk(KERN_INFO "CDATA:Buffer Full\n");
+			//printk(KERN_INFO "CDATA:Buffer Full\n");
 			//buffer full
 			flush_lcd((void *)cdata);
 			index = cdata->index;  //要用狀態的思考方式,而不要用邏輯的思考方式,如index = 0;

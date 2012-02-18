@@ -18,7 +18,7 @@ int main(void)
 	char pix[4] = {0x00, 0xff, 0x00, 0xff};
 		
 	fd = open("/dev/cdata", O_RDWR);
-	for(i =0;i<256;i++)
+	while(1)
 		write(fd, pix,4);
 
 	//i = 10000;
