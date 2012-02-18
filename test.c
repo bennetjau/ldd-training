@@ -19,6 +19,7 @@ int main(void)
 	fd = open("/dev/cdata", O_RDWR);
 
 	ioctl(fd, CDATA_CLEAR, &i);
+/*
 	sleep(3);
 	ioctl(fd, CDATA_RED);
 	sleep(3);
@@ -27,7 +28,7 @@ int main(void)
 	ioctl(fd, CDATA_BLUE);
 	sleep(3);
 	ioctl(fd, CDATA_BLACK);
-
+*/
 /*
 	for (j=0;j<10;j++){
 		ioctl(fd, CDATA_CLEAR, &i);

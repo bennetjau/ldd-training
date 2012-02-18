@@ -121,9 +121,12 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 	printk(KERN_INFO "CDATA: IOCtl\n");
 	switch(cmd){
 		case CDATA_CLEAR:
-			n=*((int*)arg);//FIXME:
+			n=*((int*)arg);//FIXME:dirty
 			printk(KERN_INFO"CDATA_CLEAR: %d pixel\n",n);
-			fb = cdata->fb;
+
+			//FixME:Lock
+			fb = cdata->fb;  // 在OS的撰寫,必須要先存成區域變數,再來使用,不要直接使用cdata->fb,在lock/unlock時才易操作
+			//FIXME:Unlock
 			for (i=0;i<n;i++)
 				writel(0x00ffffff, fb++);
 			break;
@@ -134,6 +137,7 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 			for (i=0;i<320*240;i++)
 				writel(0x00ff0000,fb++);
 			break;
+		/*
 		case CDATA_GREEN:
 			printk(KERN_INFO"CDATA_GREEN\n");
 
@@ -162,6 +166,7 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 			for (i=0;i<320*240;i++)
 			writel(0x00ffffff, fb++);
 			break;
+		*/
 	}
 
 
