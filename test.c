@@ -16,7 +16,7 @@ int main(void)
 	char buffer[80];
 	//int size = 0;
 
-	fd = open("/dev/cdata3", O_RDWR);
+	fd = open("/dev/cdata", O_RDWR);
 	//fd1 = open("/dev/cdata3", O_RDWR);
 	//sleep(10);
 

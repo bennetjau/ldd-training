@@ -62,10 +62,42 @@ static ssize_t cdata_read(struct file *filp, char *buf, size_t size, loff_t *off
 
 static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff_t *off)
 {
-	int i;
+//	int i;
 	printk(KERN_INFO "CDATA: Write\n");
-	for(i = 0;i < 5000;i++);
-		;
+/*
+	//Lab1, 無排程
+	printk(KERN_INFO "CDATA: None Schedule\n");
+	while(1){
+		printk(KERN_INFO "CDATA: in while loop\n");
+	}
+*/
+/*
+
+	//Lab2, 排程,stat=R, 所以一直拿到執行權利,loading會一直增加, 無法kill
+	printk(KERN_INFO "CDATA: Only Schedule\n");
+	while(1){
+		printk(KERN_INFO "CDATA: in while loop\n");
+		schedule();
+	}
+
+
+	//Lab3, 排程,stat=D, 無法kill,loading會一直增加
+	printk(KERN_INFO "CDATA: Schedule with Task uninterruptible\n");
+	while(1){
+		printk(KERN_INFO "CDATA: in while loop\n");
+		current->state = TASK_UNINTERRUPTIBLE;
+		schedule();
+	}
+*/
+/*
+	//Lab4, 排程, stat=S, loading不會增加,但kill時,stat=R,無法kill,loading又會一直增加
+	printk(KERN_INFO "CDATA: Schedule with Task interruptible\n");
+	while(1){
+		printk(KERN_INFO "CDATA: in while loop\n");
+		current->state = TASK_INTERRUPTIBLE;
+		schedule();
+	}
+*/
 	return 0;
 }
 
@@ -82,12 +114,13 @@ static int cdata_close(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+/*
 static int cdata_flush(struct file *filp)
 {
 	printk(KERN_INFO "CDATA: Flush\n");
 	return 0;
 }
-
+*/
 
 static struct file_operations cdata_fops = {
 	owner:	THIS_MODULE,	//After Linux 2.6, add this and let kernel handle the count
@@ -96,11 +129,19 @@ static struct file_operations cdata_fops = {
 	read:		cdata_read,
 	write: 	cdata_write,
 	ioctl:	cdata_ioctl,
-	flush:	cdata_flush,
+	//flush:	cdata_flush,
 };
+
 static int cdata_init_module(void)
 {
-	printk(KERN_INFO "CDATA: Init module\n");
+	unsigned long *fb;
+	int i;
+
+	fb = ioremap(0x33f00000, 320*240*4); //screen size 320*240
+	for (i=0;i<320*240;i++)
+		writel(0x00ff0000, fb++); // 1 pixel ,4bite
+
+	printk(KERN_INFO "CDATA: Init module~~~XXXX\n");
 	if (register_chrdev(DEV_MAJOR, DEV_NAME, &cdata_fops) < 0) {
 		printk(KERN_INFO "CDATA: Can't register driver\n");
 		return -1;
