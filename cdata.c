@@ -21,6 +21,7 @@
 
 struct cdata_t{
 	unsigned long *fb;
+
 };
 
 static int cdata_open(struct inode *inode, struct file *filp)
@@ -72,8 +73,21 @@ static ssize_t cdata_read(struct file *filp, char *buf, size_t size, loff_t *off
 
 static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff_t *off)
 {
-//	int i;
+
+	struct cdata_t *cdata = (struct cdata*)filp->private_data;
+	unsigned char *fb;
+	unsigned int i;
+
+	fb = cdata->fb;
+	
 	printk(KERN_INFO "CDATA: Write\n");
+
+
+	//這樣寫不好,要考慮buffering的部份,把AP丟進來的東西先存下來,等存滿再一次送到硬體執行
+	for (i = 0;i < size;i++)
+		writeb(buf[i], fb);
+
+
 /*
 	//Lab1, 無排程
 	printk(KERN_INFO "CDATA: None Schedule\n");
@@ -205,7 +219,7 @@ static int cdata_init_module(void)
 
 	fb = ioremap(0x33f00000, 320*240*4); //screen size 320*240
 	for (i=0;i<320*240;i++)
-		writel(0x00ff4488, fb++); // 1 pixel ,4byte
+		writel(0x00ff0000, fb++); // 1 pixel ,4byte
 
 	printk(KERN_INFO "CDATA: Init module~~~XXXX\n");
 	if (register_chrdev(DEV_MAJOR, DEV_NAME, &cdata_fops) < 0) {
