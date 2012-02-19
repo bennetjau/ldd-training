@@ -26,6 +26,7 @@ struct cdata_t{
 	unsigned char *buf;
 	unsigned int  index;
 	unsigned int offset;
+	unsigned int lock;
 };
 
 static int cdata_open(struct inode *inode, struct file *filp)
@@ -110,12 +111,22 @@ void flush_lcd(void *priv)
 	cdata->offset = offset;
 }
 
+void timer_task(struct timer_list *timer)
+{
+	current->state = TASK_RUNNING;
+
+	timer->expires = jiffies + 2*HZ/10;
+	add_timer(timer);
+
+}
 
 static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff_t *off)
 {
 
 	struct cdata_t *cdata = (struct cdata*)filp->private_data;
 	unsigned char *pixel;
+	struct timer_list *timer;
+
 	
 	unsigned int index;
 	unsigned int i;
@@ -126,6 +137,13 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 	pixel = cdata->buf;
 	index = cdata->index;
 
+	init_timer(timer);
+	timer->expires = jiffies + 2*HZ/10;
+	timer->data = (struct timer_list *)timer;
+	timer->function = &timer_task;
+
+	add_timer(timer);
+
 
 	for (i=0;i < size;i++){
 		//printk(KERN_INFO "CDATA:Index = %d\n",cdata->index++);
@@ -134,12 +152,17 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 			//buffer full
 			flush_lcd((void *)cdata);
 			index = cdata->index;  //要用狀態的思考方式,而不要用邏輯的思考方式,如index = 0;
+			current->state = TASK_INTERRUPTIBLE;
+			schedule();
 		}
 		//fb[index] = buf[i];
 		copy_from_user(&pixel[index], &buf[i], 1);
 		index++;
 	}
 	cdata->index = index;
+
+
+
 
 /*
 	//這樣寫不好,要考慮buffering的部份,把AP丟進來的東西先存下來,等存滿再一次送到硬體執行
