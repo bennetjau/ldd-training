@@ -26,7 +26,14 @@ struct cdata_t{
 	unsigned char *buf;
 	unsigned int  index;
 	unsigned int offset;
-	unsigned int lock;
+	
+	struct timer_list flush_timer;
+	struct timer_list sched_timer;
+	
+
+	//DECLARE_WAIT_QUEUE_HEAD(wq);
+	wait_queue_head_t	wq;
+
 };
 
 static int cdata_open(struct inode *inode, struct file *filp)
@@ -46,6 +53,13 @@ static int cdata_open(struct inode *inode, struct file *filp)
 	cdata->buf = kmalloc(BUF_SIZE, GFP_KERNEL);
 	cdata->index = 0;
  	cdata->offset = 0;
+
+
+	init_timer(&cdata->flush_timer);
+	init_timer(&cdata->sched_timer);
+
+	init_waitqueue_head(&cdata->wq);
+
 
 
 	filp->private_data = (void *)cdata;
@@ -83,7 +97,7 @@ static ssize_t cdata_read(struct file *filp, char *buf, size_t size, loff_t *off
 	return 0;
 }
 
-void flush_lcd(void *priv)
+void flush_lcd(unsigned long priv)
 {
 	struct cdata_t *cdata = (struct cdata *)priv;
 	unsigned int index;
@@ -94,7 +108,7 @@ void flush_lcd(void *priv)
 	int j;
 
 	buf = cdata->buf;
-	fb = cdata->fb;
+	fb = (unsigned char *)cdata->fb;
 	index = cdata->index;
 	offset = cdata->offset;
 
@@ -111,12 +125,20 @@ void flush_lcd(void *priv)
 	cdata->offset = offset;
 }
 
-void timer_task(struct timer_list *timer)
+void cdata_wake_up(unsigned long priv)
 {
-	current->state = TASK_RUNNING;
+	struct cdata_t *cdata = (struct cdata *)priv;
+	//3. FIXME:Wake up process
+	struct timer_list *sched;
+	wait_queue_head_t *wq;
 
-	timer->expires = jiffies + 2*HZ/10;
-	add_timer(timer);
+	sched = &cdata->sched_timer;
+	wq = &cdata->wq;
+
+	wake_up(wq);
+
+	sched->expires = jiffies + 10;
+	add_timer(sched);
 
 }
 
@@ -126,34 +148,61 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 	struct cdata_t *cdata = (struct cdata*)filp->private_data;
 	unsigned char *pixel;
 	struct timer_list *timer;
-
+	struct timer_list *sched;
 	
 	unsigned int index;
 	unsigned int i;
 
+	wait_queue_t wait;
+	wait_queue_head_t	*wq;
 	//printk(KERN_INFO "CDATA: Write\n");
 
 
 	pixel = cdata->buf;
 	index = cdata->index;
 
-	init_timer(timer);
-	timer->expires = jiffies + 2*HZ/10;
-	timer->data = (struct timer_list *)timer;
-	timer->function = &timer_task;
-
-	add_timer(timer);
-
+	timer = &cdata->flush_timer;
+	sched = &cdata->sched_timer;
+	wq = &cdata->wq;
 
 	for (i=0;i < size;i++){
 		//printk(KERN_INFO "CDATA:Index = %d\n",cdata->index++);
 		if(index >= BUF_SIZE){
 			//printk(KERN_INFO "CDATA:Buffer Full\n");
 			//buffer full
-			flush_lcd((void *)cdata);
-			index = cdata->index;  //要用狀態的思考方式,而不要用邏輯的思考方式,如index = 0;
+
+			//kernel 目前的時間就叫jiffies.電腦開機時,會把jiffies設成0, 每隔一秒,jiffies會累加1HZ的值, HZ=100,表kernel timer的頻率
+
+			//1. FIXME:Kernel scheduling
+			cdata->index = index; //why add this????
+
+			timer->expires = jiffies + 5*HZ;
+			timer->function = flush_lcd;
+			timer->data = (unsigned long) cdata;
+			add_timer(timer);
+
+
+			//2. FIXME: Process scheduling
+
+			sched->expires = jiffies + 10;
+			sched->function = cdata_wake_up;
+			sched->data = (unsigned long) cdata;
+			add_timer(sched);
+
+			wait.flags = 0;
+			wait.task = current;
+			add_wait_queue(wq, &wait);
+repeat:
 			current->state = TASK_INTERRUPTIBLE;
 			schedule();
+
+			index = cdata->index;  //要用狀態的思考方式,而不要用邏輯的思考方式,如index = 0;
+
+			if(index != 0)
+				goto repeat;
+
+			remove_wait_queue(wq, &wait);
+			del_timer(sched);			
 		}
 		//fb[index] = buf[i];
 		copy_from_user(&pixel[index], &buf[i], 1);
@@ -277,20 +326,20 @@ static int cdata_close(struct inode *inode, struct file *filp)
 	struct cdata_t *cdata = (struct cdata*)filp->private_data;
 
 	printk(KERN_INFO "CDATA: Close\n");
-	flush_lcd((void *)cdata);
+	flush_lcd((unsigned long)cdata);
+	del_timer(&cdata->flush_timer);
 	kfree(cdata->buf);
 	kfree(cdata);
 	//MOD_DEC_USE_COUNT;	//used in linux 2.4
 	return 0;
 }
 
-/*
+
 static int cdata_flush(struct file *filp)
 {
 	printk(KERN_INFO "CDATA: Flush\n");
 	return 0;
 }
-*/
 
 static struct file_operations cdata_fops = {
 	owner:	THIS_MODULE,	//After Linux 2.6, add this and let kernel handle the count
@@ -299,7 +348,7 @@ static struct file_operations cdata_fops = {
 	read:		cdata_read,
 	write: 	cdata_write,
 	ioctl:	cdata_ioctl,
-	//flush:	cdata_flush,
+	flush:	cdata_flush,
 };
 
 static int cdata_init_module(void)
