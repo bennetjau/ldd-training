@@ -16,9 +16,20 @@
 #include <asm/uaccess.h>
 #include "cdata_ioctl.h"
 
+void cdata_bh(unsigned long);
+DECLARE_TASKLET(my_tasklet, cdata_bh, NULL);
+
 static void cdata_ts_handler(int irq, void *priv, struct pt_regs *reg)
+{	//Top Half
+	printk(KERN_INFO "CDATA_TS: TH....\n");
+	tasklet_schedule(&my_tasklet);
+}
+
+void cdata_bh(unsigned long priv)
 {
-	printk(KERN_INFO "CDATA_TS: down....\n");
+	//Bottom Half
+	printk(KERN_INFO "CDATA_TS: BH....\n");
+	while(1);
 }
 
 static int cdata_ts_open(struct inode *inode, struct file *filp)
