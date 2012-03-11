@@ -22,6 +22,9 @@ DECLARE_TASKLET(my_tasklet, cdata_bh, NULL);
 static void cdata_ts_handler(int irq, void *priv, struct pt_regs *reg)
 {	//Top Half
 	printk(KERN_INFO "CDATA_TS: TH....\n");
+	/* FIXME:read(x,y) from ADC */
+	//read hardware info需在TF,因為需要發生中斷的當下的訊息存下來,若放在BH,則當BH執行時,可能就lost了
+
 	tasklet_schedule(&my_tasklet);
 }
 
@@ -29,7 +32,8 @@ void cdata_bh(unsigned long priv)
 {
 	//Bottom Half
 	printk(KERN_INFO "CDATA_TS: BH....\n");
-	while(1);
+
+
 }
 
 static int cdata_ts_open(struct inode *inode, struct file *filp)
@@ -100,17 +104,29 @@ static struct miscdevice cdata_ts_misc = {
 	fops:		&cdata_ts_fops,
 };
 
+struct input_dev cdata_ts_input;
+
 static int cdata_ts_init_module(void)
 {
 	//unsigned long *fb;
 	//int i;
 
 	//加在misc的原因是會自動增加裝置,也就是不用去作mknod的動作
-
+	/*
 	if(misc_register(&cdata_ts_misc) < 0){
 		printk(KERN_INFO "CDATA_TS: Can't register driver\n");
 		return -1;
 	}
+	*/
+
+	//需改成input device,原因是需要把x,y值由kernel送到user space,此時用input subsystem比較適合
+	//但實際應用通常會用到多個subsystem,所以需要稍微不同的作法,仍然先註冊misc
+
+	if(input_register_device(&cdata_ts_input) < 0){
+		printk(KERN_INFO "CDATA_TS: Can't register driver\n");
+		return -1;	
+	}
+
 	printk(KERN_INFO "CDATA_TS: Init module\n");
 
 	return 0;
