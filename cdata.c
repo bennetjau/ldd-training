@@ -34,6 +34,8 @@ struct cdata_t{
 	//DECLARE_WAIT_QUEUE_HEAD(wq);
 	wait_queue_head_t	wq;
 
+	
+
 };
 
 static int cdata_open(struct inode *inode, struct file *filp)
@@ -157,7 +159,7 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 	wait_queue_head_t	*wq;
 	//printk(KERN_INFO "CDATA: Write\n");
 
-
+	
 	pixel = cdata->buf;
 	index = cdata->index;
 
@@ -267,8 +269,11 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 	switch(cmd){
 		case CDATA_CLEAR:
 
+			//copy_from_user()屬於blocking API
 			//n=*((int*)arg);//FIXME:dirty  ,應使用 copy_from_user()
-			copy_from_user(&n, (int *)arg, 1); //???是這樣嗎？
+			copy_from_user(&n, (int *)arg, 1); //???是這樣嗎？    
+			//copy_from_user(&n, &arg, 1); //???還是這樣嗎？
+			//get_user(n,arg); <-- 簡單的type可以用這個
 
 			printk(KERN_INFO"CDATA_CLEAR: %d pixel\n",n);
 
@@ -277,6 +282,8 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 			//FIXME:Unlock
 			for (i=0;i<n;i++)
 				writel(0x00ffffff, fb++);
+
+			return 0;
 			break;
 		case CDATA_RED:
 			printk(KERN_INFO"CDATA_RED\n");
@@ -284,6 +291,8 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 			fb = cdata->fb;
 			for (i=0;i<320*240;i++)
 				writel(0x00ff0000,fb++);
+
+			return 0;
 			break;
 		/*
 		case CDATA_GREEN:
@@ -292,6 +301,7 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 			fb = cdata->fb;
 			for (i=0;i<320*240;i++)
 				writel(0x0000ff00, fb++);
+			return 0;
 			break;			
 		case CDATA_BLUE:
 			printk(KERN_INFO"CDATA_BLUE\n");
@@ -299,6 +309,7 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 			fb = cdata->fb;
 			for (i=0;i<320*240;i++)
 				writel(0x000000ff, fb++);
+			return 0;
 			break;
 		case CDATA_BLACK:
 			printk(KERN_INFO"CDATA_BALCK\n");
@@ -306,6 +317,7 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 			fb = cdata->fb;
 			for (i=0;i<320*240;i++)
 				writel(0x00000000, fb++);
+			return 0;
 			break;
 		case CDATA_WHITE:
 			printk(KERN_INFO"CDATA_WHITE\n");
@@ -313,12 +325,12 @@ static int cdata_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 			fb = cdata->fb;
 			for (i=0;i<320*240;i++)
 			writel(0x00ffffff, fb++);
+			return 0;
 			break;
 		*/
 	}
 
-
-	return 0;
+	return -ENOTTY;
 }
 
 static int cdata_close(struct inode *inode, struct file *filp)
@@ -341,6 +353,34 @@ static int cdata_flush(struct file *filp)
 	return 0;
 }
 
+int cdata_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+	unsigned long from;
+	unsigned long to;
+	unsigned long size;
+	printk(KERN_INFO "CDATA: cdata_mmap\n");
+
+	from= vma->vm_start;
+	to = 0x33f00000;
+	size = vma->vm_end-vma->vm_start;
+	
+	//一次一大塊的作法,只能在確定實體記憶體是連續的,才能如此使用
+	//remap_page_range(from, to, size, PAGE_SHARED);
+	
+
+	//如果無法確定,一般的作法一定就要一個page一個page來作
+	while(size){
+		remap_page_range(from, to, PAGE_SIZE, PAGE_SHARED);
+		from += PAGE_SIZE;
+		to += PAGE_SIZE;
+		size -= PAGE_SIZE;
+	}
+
+	printk(KERN_INFO "CDATA: start = %8x\n",vma->vm_start);
+	printk(KERN_INFO "CDATA: end = %8x\n",vma->vm_end);
+	return 0;
+}
+
 static struct file_operations cdata_fops = {
 	owner:	THIS_MODULE,	//After Linux 2.6, add this and let kernel handle the count
 	open:		cdata_open,
@@ -349,6 +389,7 @@ static struct file_operations cdata_fops = {
 	write: 	cdata_write,
 	ioctl:	cdata_ioctl,
 	flush:	cdata_flush,
+	mmap:		cdata_mmap,
 };
 
 static int cdata_init_module(void)

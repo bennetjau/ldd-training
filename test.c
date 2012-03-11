@@ -16,14 +16,46 @@ int main(void)
 //	int j;
 
 	char pix[4] = {0x00, 0xff, 0x00, 0xff};
+	char pix_green[4] = {0x00, 0x00, 0xff, 0x00};
+
+	i = 10000;
+	char *fb;
+
+	fd = open("/dev/cdata", O_RDWR);
+
+	fb = mmap(0, 1024, PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
+	//sleep(25);
+
+	while(1)
+		write(fb, pix_green,4);
+
+	close(fd);
+	return 0;
+
+/*
+	char pix_blue[4] = {0x00, 0x00, 0x00, 0xff};
+	char pix_green[4] = {0x00, 0x00, 0xff, 0x00};
+
+	pid_t pid = fork();
+
 		
 	fd = open("/dev/cdata", O_RDWR);
 	//for(i =0;i<320*240;i++)
-	while(1)
-		write(fd, pix,4);
+
+
+	if(pid == 0){
+		//parent process
+		while(1)
+			write(fd, pix_green,4);
+	}else{
+		//child process
+		while(1)
+			write(fd, pix_blue,4);
+	}
 
 	//i = 320*240;
 	//ioctl(fd, CDATA_CLEAR, &i);
+*/
 /*
 	sleep(3);
 	ioctl(fd, CDATA_RED);	
@@ -55,10 +87,10 @@ int main(void)
 
 	//write(fd, s, sizeof(s));
 	//size = read(fd, buffer, sizeof(buffer));
-	close(fd);
+	//close(fd);
 
 	//sleep(10);
 	//close(fd1);
 
-	return 0;
+	//return 0;
 }
