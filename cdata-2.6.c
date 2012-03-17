@@ -12,7 +12,7 @@
 #include <linux/irq.h>
 #include <linux/miscdevice.h>
 #include <linux/input.h>
-#include <linux/semaphore.h>
+#include <linux/mutex.h>
 #include <linux/spinlock.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
@@ -35,7 +35,7 @@ struct cdata_t{
 
 	//DECLARE_WAIT_QUEUE_HEAD(wq);
 	wait_queue_head_t	wq;
-	struct semaphore sem;
+	DEFINE_MUTEX(mutex);
 	spinlock_t		lock;
 };
 
@@ -63,7 +63,7 @@ static int cdata_open(struct inode *inode, struct file *filp)
 
 	init_waitqueue_head(&cdata->wq);
 
-	sema_init(&cdata->sem, 1);
+	mutex_init(&cdata->mutex);
 	spin_lock_init(&cdata->lock);
 
 	filp->private_data = (void *)cdata;
@@ -173,8 +173,8 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 	//處理reentrency的問題:down,up
 	//down();
 
-	down_interruptible(&cdata->sem);
-
+	//down_interruptible(&cdata->sem);
+	mutex_lock(&cdata->mutex);
 	//處理Process Context code, Interrupt Context code 之間的共用資料：spin
 	//spin_lock_irqsave();
 
@@ -192,7 +192,8 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 	wq = &cdata->wq;
 	//UNLOCK時機;call up();
 	//up();
-	up(&cdata->sem);
+	//up(&cdata->sem);
+	mutex_unlock(&cdata->mutex);
 
 
 	for (i=0;i < size;i++){
