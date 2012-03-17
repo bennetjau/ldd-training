@@ -13,6 +13,7 @@
 #include <linux/miscdevice.h>
 #include <linux/input.h>
 #include <linux/semaphore.h>
+#include <linux/spinlock.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
 #include "cdata_ioctl.h"
@@ -35,6 +36,7 @@ struct cdata_t{
 	//DECLARE_WAIT_QUEUE_HEAD(wq);
 	wait_queue_head_t	wq;
 	struct semaphore sem;
+	spinlock_t		lock;
 };
 
 static int cdata_open(struct inode *inode, struct file *filp)
@@ -62,6 +64,7 @@ static int cdata_open(struct inode *inode, struct file *filp)
 	init_waitqueue_head(&cdata->wq);
 
 	sema_init(&cdata->sem, 1);
+	spin_lock_init(&cdata->lock);
 
 	filp->private_data = (void *)cdata;
 
@@ -108,10 +111,13 @@ void flush_lcd(unsigned long priv)
 	unsigned int offset;
 	int j;
 
+
+	spin_lock(&cdata->lock);
 	buf = cdata->buf;
 	fb = (unsigned char *)cdata->fb;
 	index = cdata->index;
 	offset = cdata->offset;
+	spin_unlock(&cdata->lock);
 
 	for (i=0;i < index;i++){
 		writeb(buf[i], fb+offset);
@@ -168,10 +174,13 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 
 	//處理Process Context code, Interrupt Context code 之間的共用資料：spin
 	//spin_lock_irqsave();
+
+	spin_lock(&cdata->lock);
 	pixel = cdata->buf;
 	index = cdata->index;
 	//
 	//spin_unlock_irqsave();
+	spin_unlock(&cdata->lock);
 
 	timer = &cdata->flush_timer;
 	sched = &cdata->sched_timer;
@@ -190,9 +199,9 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 			//kernel 目前的時間就叫jiffies.電腦開機時,會把jiffies設成0, 每隔一秒,jiffies會累加1HZ的值, HZ=100,表kernel timer的頻率
 
 			//1. FIXME:Kernel scheduling
-	down_interruptible(&cdata->sem);
+			down_interruptible(&cdata->sem);
 			cdata->index = index; //why add this????
-	up(&cdata->sem);
+			up(&cdata->sem);
 			timer->expires = jiffies + 5*HZ;
 			timer->function = flush_lcd;
 			timer->data = (unsigned long) cdata;
@@ -212,9 +221,9 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 repeat:
 			current->state = TASK_INTERRUPTIBLE;
 			schedule();
-	down_interruptible(&cdata->sem);
+			down_interruptible(&cdata->sem);
 			index = cdata->index;  //要用狀態的思考方式,而不要用邏輯的思考方式,如index = 0;
-	up(&cdata->sem);
+			up(&cdata->sem);
 			if(index != 0)
 				goto repeat;
 
