@@ -12,6 +12,7 @@
 #include <linux/irq.h>
 #include <linux/miscdevice.h>
 #include <linux/input.h>
+#include <linux/semaphore.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
 #include "cdata_ioctl.h"
@@ -33,9 +34,7 @@ struct cdata_t{
 
 	//DECLARE_WAIT_QUEUE_HEAD(wq);
 	wait_queue_head_t	wq;
-
-	
-
+	struct semaphore sem;
 };
 
 static int cdata_open(struct inode *inode, struct file *filp)
@@ -62,7 +61,7 @@ static int cdata_open(struct inode *inode, struct file *filp)
 
 	init_waitqueue_head(&cdata->wq);
 
-
+	sema_init(&cdata->sem, 1);
 
 	filp->private_data = (void *)cdata;
 
@@ -159,13 +158,28 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 	wait_queue_head_t	*wq;
 	//printk(KERN_INFO "CDATA: Write\n");
 
-	
+	//要加lock/unlock時,應該放在如下:
+	//盡可能要lock的東西集中,不要到處加
+	//LOCK時機;call down();
+	//處理reentrency的問題:down,up
+	//down();
+
+	down_interruptible(&cdata->sem);
+
+	//處理Process Context code, Interrupt Context code 之間的共用資料：spin
+	//spin_lock_irqsave();
 	pixel = cdata->buf;
 	index = cdata->index;
+	//
+	//spin_unlock_irqsave();
 
 	timer = &cdata->flush_timer;
 	sched = &cdata->sched_timer;
 	wq = &cdata->wq;
+	//UNLOCK時機;call up();
+	//up();
+	up(&cdata->sem);
+
 
 	for (i=0;i < size;i++){
 		//printk(KERN_INFO "CDATA:Index = %d\n",cdata->index++);
@@ -176,8 +190,9 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 			//kernel 目前的時間就叫jiffies.電腦開機時,會把jiffies設成0, 每隔一秒,jiffies會累加1HZ的值, HZ=100,表kernel timer的頻率
 
 			//1. FIXME:Kernel scheduling
+	down_interruptible(&cdata->sem);
 			cdata->index = index; //why add this????
-
+	up(&cdata->sem);
 			timer->expires = jiffies + 5*HZ;
 			timer->function = flush_lcd;
 			timer->data = (unsigned long) cdata;
@@ -197,9 +212,9 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 repeat:
 			current->state = TASK_INTERRUPTIBLE;
 			schedule();
-
+	down_interruptible(&cdata->sem);
 			index = cdata->index;  //要用狀態的思考方式,而不要用邏輯的思考方式,如index = 0;
-
+	up(&cdata->sem);
 			if(index != 0)
 				goto repeat;
 
@@ -210,8 +225,9 @@ repeat:
 		copy_from_user(&pixel[index], &buf[i], 1);
 		index++;
 	}
+	down_interruptible(&cdata->sem);
 	cdata->index = index;
-
+	up(&cdata->sem);
 
 
 

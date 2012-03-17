@@ -19,16 +19,21 @@
 void cdata_bh(unsigned long);
 DECLARE_TASKLET(my_tasklet, cdata_bh, NULL);
 
-/*FIXME 改成prividate data */
-int x;
-int y;
+/*FIXME 改成private data */
+//int x;
+//int y;
 
-struct input_dev ts_input;
+//struct input_dev ts_input;
+
+//priviate data
+struct cdata_ts{
+	struct input_dev ts_input;
+	int x;
+	int y;
+};
 
 static int ts_input_open(struct input_dev *dev)
 {
-	input_report_abs(dev, ABS_X, x);
-	input_report_abs(dev, ABS_Y, y);	
 }
 
 static int ts_input_close(struct input_dev *dev)
@@ -37,27 +42,41 @@ static int ts_input_close(struct input_dev *dev)
 
 static void cdata_ts_handler(int irq, void *priv, struct pt_regs *reg)
 {	//Top Half
+
+	struct cdata_ts *cdata = (struct cdata_ts *) priv;
+
 	printk(KERN_INFO "CDATA_TS: TH....\n");
+
 	/* FIXME:read(x,y) from ADC */
-	x = 100;
-	y = 100;
+	cdata->x = 100;
+	cdata->y = 100;
 
 
 	//read hardware info需在TF,因為需要發生中斷的當下的訊息存下來,若放在BH,則當BH執行時,可能就lost了
 
+	my_tasklet.data = (unsigned long)cdata;
 	tasklet_schedule(&my_tasklet);
 }
 
 void cdata_bh(unsigned long priv)
 {
 	//Bottom Half
+	struct cdata_ts *cdata = (struct cdata_ts *) priv;
+	struct input_dev *dev = &cdata->ts_input;
 	printk(KERN_INFO "CDATA_TS: BH....\n");
+	input_report_abs(dev, ABS_X, cdata->x);
+	input_report_abs(dev, ABS_Y, cdata->y);	
+
 }
 
 static int cdata_ts_open(struct inode *inode, struct file *filp)
 {
-	u32 reg;
+	struct cdata_ts * cdata;
+	cdata = kmalloc(sizeof(struct cdata_ts), GFP_KERNEL);
+
 #if 0
+	u32 reg;
+
 	reg = GPGCON;
 	reg |= 0xff000000; //改24~31位元,其他就'don't care'
 	GPGCON = reg;
@@ -75,23 +94,27 @@ static int cdata_ts_open(struct inode *inode, struct file *filp)
 
 	/* Request touch panel IRQ */
 	if (request_irq(IRQ_TC, cdata_ts_handler, 0,
-		"cdata-ts", 0)){
+		"cdata-ts", (void *) cdata)){
 		printk(KERN_ALERT "CDATA_TS: request irq failed. \n");
 		return -1;
 	}
 
 	//等裝置建立起來後,才去register input subsystem
 	/** handling input device ***/
-	ts_input.name = "cdata-ts";
-	ts_input.open = ts_input_open;
-	ts_input.close = ts_input_close;
+	cdata->ts_input.name = "cdata-ts";
+	cdata->ts_input.open = ts_input_open;
+	cdata->ts_input.close = ts_input_close;
 	//capabilties
 	//可回報絕對x,y
-	ts_input.absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
+	cdata->ts_input.absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
 	//可回報enter
 	//ts_input.evbit[0] = BIT(KEY_ENTER) | BIT(KEY_F5);
 
-	input_register_device(&ts_input);
+	input_register_device(&cdata->ts_input);
+	cdata->x = 0;
+	cdata->y = 0;
+	filp->private_data = (void *)cdata;
+
 
 	return 0;
 }
