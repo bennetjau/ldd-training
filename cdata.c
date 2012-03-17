@@ -111,7 +111,7 @@ void flush_lcd(unsigned long priv)
 	unsigned int offset;
 	int j;
 
-
+	//在中斷模式下跑,所以不會被中斷,不用使用spin_lock_irqsave
 	spin_lock(&cdata->lock);
 	buf = cdata->buf;
 	fb = (unsigned char *)cdata->fb;
@@ -175,12 +175,14 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size, loff
 	//處理Process Context code, Interrupt Context code 之間的共用資料：spin
 	//spin_lock_irqsave();
 
-	spin_lock(&cdata->lock);
+
+	//不是在中斷模式下跑,所以會被中斷,要使用spin_lock_irqsave, spin_unlock_irqrestore
+	spin_lock_irqsave(&cdata->lock);
 	pixel = cdata->buf;
 	index = cdata->index;
 	//
-	//spin_unlock_irqsave();
-	spin_unlock(&cdata->lock);
+	//spin_unlock_irqrestore();
+	spin_unlock_irqrestore(&cdata->lock);
 
 	timer = &cdata->flush_timer;
 	sched = &cdata->sched_timer;
